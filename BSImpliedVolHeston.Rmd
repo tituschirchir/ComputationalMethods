@@ -1,0 +1,307 @@
+---
+title: 'FE-621 Homework #1'
+author: "Titus K. Chirchir"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  pdf_document: default
+  html_document: default
+header-includes: 
+- \usepackage{graphicx}
+- \usepackage{float}
+- \usepackage{hyperref}
+- \hypersetup{urlcolor=blue, linkcolor=blue}
+---
+```{r, echo=F, cache=F, include=F}
+source(file = "BSImpliedVolatility.R")
+source(file="HestonModel.R")
+library("knitr","xtable")
+stock="AAPL"
+```
+##Introduction
+We implement the functions for this homework in R. To successfully execute the functions, one would need to install *curl*, *quantmod* and *scatterplot3d* packages. These libraries are explicitly loaded in *BSImpliedVolatility.R*. Opening *BSImpliedVolHeston.Rproj* will open all the required files for this exercise.
+
+##Problem 1 (60 points). Black–Scholes–Merton Pricing Formula. Implied Volatility.
+### Part a 
+Implement a function that computes the price of an European Call and Put Option. The function should receive as parameters the stock price $S_0$, the time to maturity $\tau=T-t$, the strike price $K$, the interest rate $r$, and the volatility $\sigma$. Calculate and output both the price of a call and a put for: $S_0 = K = 100$, time to expiry 1 month, i.e., $\tau = 30/252$, $r = 5\%$, and $\sigma = 20\%$.
+
+  * **Solution: ** See *BlackScholesPricer(...)* function for the implementation of B-S option pricing logic
+  
+  * **Output**: See Table \ref{bspCallPut} for a summary of the prices.
+  
+```{r, echo=F}
+callPrice <- BlackScholesPricer(isCall=T, S=100, K=100, tau=30/252, r=0.05, vol=0.20)
+putPrice <- BlackScholesPricer(isCall=F, S=100, K=100, tau=30/252, r=0.05, vol=0.20)
+kable(data.frame("Call"=c("Price"=callPrice), "Put"=c("Price"=putPrice)), format="latex", caption = "\\label{bspCallPut} Prices of Call and Put Option with the Inputs in (a)")
+```
+
+###Part b
+Check that the Put-Call parity relation holds, please see Section 4 from \cite{sergei}. Use the same parameters as above.
+  
+  * **Solution: ** Put-Call Parity requires that $C-P = S- Ke^{-r\tau}$. We have implemented this in *PutCallParityCheck(...)* which returns *TRUE* if the Put-Call parity is met and *FALSE* otherwise.
+
+  * **Output**: 
+    * Put-Call Parity is met: **`r PutCallParityCheck(S=100, K=100, tau=30/252, r=0.05, vol=0.20)`**
+
+###Part c : Implied Volatility (Bisection Method)
+The implied volatility is, by definition, the value of $\sigma$ for which the function 
+$$f(\sigma)=C_{BSM}(S_0,K,T,r;\sigma) - C_M(K,T)$$
+is zero. Here, we denoted by $C_M(K,T)$ and $C_{BSM}(S_0,K,T,r;\sigma)$ the market price of an European Call Option and the Black–Scholes–Merton price, respectively. Typically, $C_M(K,T)$ is taken as the average of best bid and best ask quotes for the respective option from the financial market. In this problem please download option prices (you can use the Bloomberg Terminal, Yahoo! Finance, etc.) for an equity (any equity not an ETF or index), for 3 different maturities (nearest to 1 month, 2 months, and 6 months) and 20 strike prices. Compute the implied volatility using the bisection method for each of these options. Use a tolerance level $\epsilon=10^{-4}$ and present the results in a table.
+
+  * **Solution** : For this exercise, I chose to use option chain data of AAPL stock with maturity dates *2017-03-17*, *2017-04-21*, and *2017-10-20*. I download the data programmatically using R Api (*getOptionChain*) in the *quantmod* package which retrieves data from Yahoo! Finance data bank. I have saved the data in .csv files and so subsequent runs of the program will retrieve data from the package rather than from Yahoo! Finance. If necessary, one can download a new set of data by invoking *DownloadOptionsDataToCsv(security, maturityDates)*
+
+    * **Bisection method**: This is a root finding mechanism whereby an interval is bisected repeatedly and then the subinterval that must contain the root is selected for further subdividing. The root is selected when it is within a certain tolerance of the expected value. We have implemented it in ***bisectionImpliedVols***. The price of AAPL stock at the time was $S=130$
+        * *Test*: Check with results from (a) above where $C_{mkt} = 3.051184$ and expected implied vol, $\sigma_{imp} = 20\%$
+
+```{r, echo=FALSE}
+t1 <-Sys.time()
+impVol <- calcImpliedVols(isCall=T,isBisection=T, callPrice, S=100, K=100, tau=30/252, r=0.05, 10^-4)
+t1 <-Sys.time()-t1
+variance<- abs(0.2 - impVol) * 100 /0.2
+```
+        * *Output*: We see that the calculated implied volatility of `r impVol*100` % is within `r variance` % of the expected volatility of 20%. This check gives us confidence that the algorithm is working as expected. We can therefore proceed to evaluate implied volatilities for several strike prices and maturity dates for **AAPL** call options.
+    * **Tables**: See Table \ref{iv0317} (2017-03-17 Maturity), Table \ref{iv0421} (2017-04-21 Maturity) and Table \ref{iv1020} (2017-10-20 Maturity) for the results. The implied volatilities calculated using the Bisection method are on the *Imp.Vol.Bisection* column.
+        
+```{r, echo=F}
+#DownloadOptionsDataToCsv(stock, c("2017-03-17","2017-04-21","2017-10-20"))
+dataFrame0317 <- GetImpliedVolatilities(r=0.05,stock, "2017-03-17", "2017-02-17")
+kable(tail(dataFrame0317,20), format = "latex", digits = 5,  caption = "\\label{iv0317} Implied Vols for Options Maturing on 2017-03-17")
+
+dataFrame0421 <- GetImpliedVolatilities(r=0.05,stock, "2017-04-21", "2017-02-17")
+kable(tail(dataFrame0421,20), format = "latex", digits = 5,  caption = "\\label{iv0421} Implied Vols for Options Maturing on 2017-04-21")
+
+dataFrame1020 <- GetImpliedVolatilities(r=0.05,stock, "2017-10-20", "2017-02-17")
+kable(tail(dataFrame1020,20), format = "latex", digits = 5, caption = "\\label{iv1020} Implied Vols for Options Maturing on 2017-10-20")
+```
+      
+###Part d: Secant method 
+  * **Solution**: We have implemented this in *secantImpliedVols(...)* function. 
+      * **Test**: Just like we did in (c), we test the algorithm using the results from (a) above where $C_{mkt} = 3.051184$ and expected implied vol, $\sigma_{imp} = 20\%$.  
+      
+```{r, echo=FALSE}
+t2<-Sys.time()
+impVol <- calcImpliedVols(T,F, callPrice, S=100, K=100, tau=30/252, r=0.05, 10^-4)
+t2 <-Sys.time()-t2
+variance<- (abs(0.2-impVol))/0.2
+```
+        
+      * *Output*: We see that the calculated implied volatility of `r impVol*100` is within 3.479315e-06% of the expected volatility of 20%. This check gives us confidence that the algorithm is working as expected.
+  * *Tables*:  Notice that the tables generated in (c) contain column labelled *Imp.Vol.Secant*. This is a result of running the algorithm implemented in *secantImpliedVols(...)* against the downloaded AAPL option prices.
+  * *Conclusion*: Comparing the *Imp.Vol.Secant* and *Imp.Vol.Bisection* columns in Tables \ref{iv0317}, \ref{iv0421} and \ref{iv1020}, it is apparent that the two methods yield similar results for the implied volatility. The difference is of the order of $10^{-5}$. We however see a difference is in the speed at which the two algorithms converge to a root for the implied vol. While the Bisection method would take `r t1` ms to execute for a given set of variables, Secant method would take `r t2` ms for the same set of variables. This implies that the Secant method is almost 10 times faster than the bisection method and would arrive at the solution faster. The secant method is faster because it takes less iterations for it to arrive at a solution
+
+###Part e: Plotting the Volatility Smiles
+The volatility smile for AAPL call options for the three maturities above is represented below in figure \ref{fig:volsmile}. The smile is a plot of the implied volatilities versus the Strike price of the options. Figure \ref{fig:volsurface} represents a 3D scatter of the volatilities. Each of the three maturities get a dimension. An interpolation of this would yield the Volatility surface. This skew/smile pattern is observed because the underlying return risk-neutral distribution is not normally distributed as postulated by the Black-Scholes model. We observe that the slope of the curve is higher for calls that are closer to maturity and further from the Strike. That is, if we consider two call options with the same strike prices but different maturity dates, the one with a shorter maturity will exhibit higher volatility.
+
+```{r, echo=F}
+rrr<-rbind(dataFrame1020,dataFrame0421, dataFrame0317)
+```
+
+``` {r, fig.cap = "Volatility Smile for AAPL Call Options\\label{fig:volsmile}", echo = FALSE}
+
+plot(dataFrame0317[,1], dataFrame0317[,4], type="o", col="blue", xlab = "Strike", ylab = "Implied Volatility", 
+     ylim = c(min(dataFrame1020[,4]),max(dataFrame0317[,4])), 
+     xlim=c(min(dataFrame0317[,1]),max(dataFrame0421[,1])))
+lines(dataFrame0421[,1], dataFrame0421[,4], type = "o", col="red")
+lines(dataFrame1020[,1], dataFrame1020[,4], type = "o", col="orange")
+ddd<-paste(round(360*c(dataFrame0317[1,2], dataFrame0421[1,2],dataFrame1020[1,2]),1))
+legend('topright', ddd,  title = "Days To Maturity",col=c("red", "blue","orange"), lty=1, cex=0.8)
+grid(NULL, NULL, lwd = 1, col="red")
+```
+
+```{r, fig.cap = "Volatility Surface for AAPL Call Options\\label{fig:volsurface}", echo=F}
+scatterplot3d(rrr[,1], rrr[,2], rrr[,4], ylab = "Time to Maturity", xlab = "Strike", zlab = "Implied Volatility")
+```
+
+
+###Part f: Greeks 
+Calculate the derivatives of the call option price with respect to $S$ (Delta, $\Delta$), Vega and the second derivative with respect to $S$ (Gamma, $\Gamma$). The parameters are as in part a). Approximate these derivatives using an approximation of the partial derivatives. Compare the numbers obtained by the two methods.
+
+*Solution*
+For this exercise, we will approximate the value of the first-order derivatives using Backward method as 
+$$\frac{\partial f(x)}{\partial x} = \frac{f(x+\delta x)- f(x)}{\delta x}$$ 
+and second order derivatives as 
+$$\frac{\partial^2 f(x)}{\partial x^2} = \frac{f(x+\delta x)- 2 f(x) + f(x-\delta x)}{\delta x^2} $$
+$$\Delta = \frac{\partial C}{\partial S} = N(d_1)$$
+$$Vega = \frac{\partial C}{\partial \sigma} = \sqrt\tau\cdot S N'(d_1) = \sqrt\frac{\tau}{2\pi}\cdot S\cdot e^\frac{-d_1^2}{2}$$
+
+
+$$\Gamma = \frac{\partial ^2C}{\partial S^2} = \frac{N'(d_1)} {S\cdot \sigma\sqrt\tau} =\frac{e^{-d_1^2/2}}{S\cdot \sigma\sqrt{2\pi \tau}} $$
+
+See *vega(...)*, *CallVegaApproximation(...)*, *gamma(...)*, *CallVegaApproximation(...)*, *delta(...)*, and *CallVegaApproximation(...)* for the implementations of the above methods of calculating the Greeks. Table \ref{greekderiv} shows the comparisons of the Greek values calculated using the derived values vs using finite difference methods. We observe that the finite difference values are within at most 0.00203% from the values from numerical differentiation.
+
+```{r, echo=F}
+delt<-delta(S=100, K=100, tau=30/252, r=0.05, vol=0.20)
+veg<-vega(S=100, K=100, tau=30/252, r=0.05, vol=0.20)
+gamm<-gamma(S=100, K=100, tau=30/252, r=0.05, vol=0.20)
+
+vegaApprox<-CallVegaApproximation(S=100, K=100, tau=30/252, r=0.05, vol=0.20, del=10^-4)
+gammaApprox<-CallGammaApproximation(S=100, K=100, tau=30/252, r=0.05, vol=0.20, del=10^-4)
+deltaApprox<-CallDeltaApproximation(S=100, K=100, tau=30/252, r=0.05, vol=0.20, del=10^-4)
+
+Delta<-c("Derived"=delt, "Approximated"=deltaApprox, "%Diff"=deviationFrom(delt, deltaApprox))
+Vega<-c("Derived"=veg, "Approximated"=vegaApprox, "%Diff"=deviationFrom(veg, vegaApprox))
+Gamma<-c("Derived"=gamm, "Approximated"=gammaApprox, "%Diff"=deviationFrom(gamm, gammaApprox))
+
+kable(data.frame(Delta,Vega,Gamma), format = "latex", caption = "\\label{greekderiv} Summary of the Greeks for Given Inputs")
+
+```
+
+###Part g: Greeks for APPL Call Options
+Apply the formulae developed in part f) to all the options you looked at in part c). To this end use the implied volatilities you previously calculated for each of the options.
+
+**Solution**
+See *PopulateGreeks(...)* function for the transformations to calculate Delta, Gamma and Vega. The results are presented in Table \ref{greek0317}, Table \ref{greek0421} and Table \ref{greek1020}:
+
+```{r, echo=F}
+df <- PopulateGreeks(dataFrame0317, S=130, r=0.05)
+kable(tail(df,20), format = "latex", digits = 5, caption = "\\label{greek0317} Greeks for Options Maturing on 2017-03-17")
+```
+
+```{r, echo=F}
+df <- PopulateGreeks(dataFrame0421, S=130, r=0.05)
+kable(tail(df,20), format = "latex", digits = 5, caption = "\\label{greek0421} Greeks for Options Maturing on 2017-04-21")
+```
+
+```{r, echo=F}
+df <- PopulateGreeks(dataFrame1020, S=130, r=0.05)
+kable(tail(df,20), format = "latex", digits = 5,  caption = "\\label{greek1020} Greeks for Options Maturing on 2017-10-20")
+```
+##Problem 2 (30 points). Numerical Integration of real–valued functions:
+Conside the real-valued function
+$$
+f(x) = 
+\begin{cases} 
+\frac{\sin(x)}{x}, &\mbox{for } x \neq 0 \\ 
+1, & \mbox{for } x = 0 
+\end{cases}
+$$
+We can calculate its integral as: $\int_{-\infty}^{\infty} f(x) dx = \pi$
+
+```{r, fig.cap = "f(x) = sin(x)/x\\label{fig:sinx}", fig.pos="htb!", echo=F}
+f <- function(x) ifelse(x == 0, 1, sin(x) / x)
+x<-seq(-100,100,0.001)
+plot(x,f(x), type="l", col="purple")
+abline(h=0,v=0, col="black")
+```
+
+###Part a : Quardrature (Simpson's and Trapezoidal Rules)
+Implement the trapezoidal and the Simpson’s quadrature rules to numerically compute the definite integral above. The algorithms are presented in \cite{rouah}, please see Chapter 5.
+
+* **Solutions**:
+
+```{r, echo=F}
+a <- 10 ^ 4
+N <- a
+simpArea<-SimpsonRule(f, -a, a, N)
+trapArea<-TrapezoidRule(f, -a, a, N)
+```
+     * *Trapezoidal Rule*: The trapezoidal rule estimates the definite integral $\int_{a}^{b} f(x) dx \approx (b-a)\Big[\frac{f(b)+f(a)}{2}\Big]$. We implement this in *TrapezoidRule(f,a,b,N)* where *N* is the number of discrete increments of *x*
+We choose $N = a =  10^6$ 
+        * *Output*: Value of integral with Simpson's method is **`r trapArea`** which is within **`r deviationFrom(pi, trapArea)`%** from expected value of $\pi$
+   
+    * *Simpson's rule:*  Simpson's rule uses the following methodology to approximate a definite integral:
+$\int_{a}^{b} f(x) dx \approx \frac{b-a}{6}\bigg[f(a)-4f\bigg(\frac{a+b}{2}\bigg)+f(b)\bigg]$. We implement this in *SimpsonRule(f,a,b,N)* where *N* is the number of discrete increments of *x*
+        * *Output*: Value of integral with Simpson's method is **`r simpArea`** which is within **`r deviationFrom(pi, simpArea)`%** from expected value of $\pi$
+
+###Part b: Truncation Error
+For this part we investigate the variance of the solutions acheived by Trapezoid and Simpson's quardrature methods and the expected values for different $N$ and $a$ values. The function under scrutiny is the same one we used in part a). 
+
+  * **Solution**: We have implemented a function *TruncationError(f, As, Ns)* that accepts an array of $a$-values and $N$-values and returns 2 tables; one containing the truncation errors for varying *N* (Table \ref{trunerrorN}) and the other the truncation error for varying *a* (Table \ref{trunerrorA}). Both tables show results from Simpson's and Trapezoid rule side by side.
+      * *Observation*: We observe that in both scenarios (varying *a* and *N*), the Simpson's method gives a result that is closer to the expected value over all iterations compared to the Trapezoid rule. 
+      
+
+```{r, echo=F}
+vals<-c(1:5)
+Ns<-10^vals
+As<-Ns
+dfms<-TruncationError(f, As, Ns)
+dataframeNs<-dfms[[1]]
+dataframeAs<-dfms[[2]]
+kable(dataframeNs, digits = 5, format = "latex", caption = "\\label{trunerrorN} Truncation Errors for Various Divisions, N")
+kable(dataframeAs, digits = 5, format = "latex", caption = "\\label{trunerrorA} Truncation Errors for Various upper and lower bounds a")
+```
+
+###Part c
+```{r, echo=F}
+ansTrap<-TrapezoidIterativeApproximation(f,-a,a,10^(-4))
+ansSimp<-SimpsonIterativeApproximation(f,-a,a,10^(-4))
+```
+As illustrated in Table \ref{partc}, Simpson's rule arrives at a solution within $\epsilon$ in fewer steps and less time compared to Trapezoid rule. Simpson's rule arrives at a solution of `r ansSimp["Value"]` (within `r deviationFrom(pi, ansSimp["Value"])`% of $\pi$) in `r ansSimp["Time"]` ms which is `r ansTrap["Time"]/ansSimp["Time"]` times faster than when we use Trapezoid Rule which gives a result of `r ansTrap["Value"]` (within `r deviationFrom(pi, ansTrap["Value"])`% of $\pi$) in `r ansTrap["Time"]` ms. The iterations difference is `r ansTrap["Iterations"] - ansSimp["Iterations"]` with Trapezoid rule incurring more steps.
+
+```{r, echo=F}
+df2<- data.frame("Trapezoid"=ansTrap,"Simpson"=ansSimp)
+kable(df2, digits = 7, format = "latex", caption = "\\label{partc} Comparison of Trapezoid and Simpson execution time and iterations")
+```
+
+###Part d
+Consider $$g(x) = 1+e^{-x}\sin (8x^{\frac{2}{3}})$$ Use trapezoidal and simpson's rule to evaluate $\int_{0}^{2} g(x) dx$ using a tolerance level of $\epsilon = 10^{-4}$
+
+```{r, fig.cap = "g(x) = 1+exp(-x)*sin(8*x^(2/3)) \\label{fig:gx}", echo=F}
+fn <- function(x) {
+  1+exp(-x)*sin(8*x^(2/3))
+}
+x<-seq(0,4,0.001)
+plot(x,fn(x), type="l", col="red")
+abline(h=1,v=c(2,0), col="black")
+```
+
+```{r, echo=F}
+trapArea<-TrapezoidIterativeApproximation(fn, 0, 2, 10^-4)
+simpArea<-SimpsonIterativeApproximation(fn, 0, 2,10^-4)
+kable(data.frame("Trapezoid"=trapArea, "Simpsons"=simpArea), digits = 7, format = "latex", caption="\\label{partd} Simpsons and Trapezoid Rule Results for g(x)")
+```
+
+* **Solution** : See Table \ref{partd} for a summary of the results, runtimes and iterations
+
+##Problem 3 (10 points). The Heston Model and Stochastic Volatility. 
+The numerical integration techniques in Problem 2 are used in practice to calculate the price of Options. Here we consider the Heston Model. The paper \cite{sergei} provides a good implementation of the Heston Model and the corresponding pricing problem. Compute numerically the price of the European Call Option using the formula $C(S_0,K,V_0,t,T)=SP_1-Ke^{(r-q)(T-t)}P_2$ (eqn 1.4 in \cite{sergei}), with the parameters provided in the same paper in Section 6. Please note that in order to calculate the call option price $C(S_0, K, V_0, t, T)$ one needs to evaluate the integral 
+$$
+P_j=\frac{1}{2}+\frac{1}{\pi}\int_{0}^{\infty}\Re\Big[\frac{e^{-iu\ln(k)}\psi_j(S_0,V_0,t,T,u)}{iu} \Big]du,\ \ \ \  j=1,2
+$$
+where $$
+\begin{aligned}
+\psi_j(S_0,V_0,t,T;\phi)&=e^{C_j(\tau;\phi)+D_j(\tau;\phi)V_0+i\phi S_0}, & \tau&= T-t, \\ C_j(\tau;\phi)&=(r-q)\phi i\tau+\frac{\kappa\theta}{\sigma^2}\Bigg[(b_j-\rho\sigma i+d)\tau-2\ln\bigg[\frac{1-e^{d\tau}}{1-g}\bigg]\Bigg], \\ D_j(\tau;\phi)&=\frac{b_j-\rho\sigma\phi i+d}{\sigma^2}\Bigg[\frac{1-e^{d\tau}}{1-ge^{d\tau}}\Bigg] \\
+\end{aligned}
+$$
+$u_1=0.5, u_2=-0.5, a=\kappa\theta, b_1 = \kappa + \lambda-\rho\sigma, b_2=\kappa + \lambda.$
+
+These equations are adapted from \cite{sergei}. For further elaboration on the constants and what they represent, please refer to the paper. Using Simpson’s Rule we evaluate the integral and consequently the price of the all option with tolerance $\epsilon = 10^{-4}$. We check our answers versus the Table 1 in \cite{sergei}.
+
+**Solution**: See *Call.Heston(...)*. The results from implementing the Heston model with $\kappa=\{4,2,1\}, \sigma=0.2, S_0=1, K=\{0.5,0.75,1,1.25,1.5\}, \rho=-0.3, \theta=0.1,\lambda=r=q=0, \tau=5$ is shown in Table \ref{hestontable}. These values are shown side-by-side with the values calculated in the paper \cite{sergei}. The results from our implementation are very similar to the paper's values as they match to within $0.2\%$ for all strikes and $\kappa$ values.
+
+
+```{r, echo=F}
+tab<-Call.Heston()
+Paper.Results<-c(0.543017,0.385109,0.273303,0.195434,0.14121)
+kable(cbind(tab,Paper.Results), format = "latex", digits = 5, caption = "\\label{hestontable} Heston Model Call Prices for Kappa-Strike Pairs")
+```
+
+
+\begin{thebibliography}{9}
+\bibitem{clewlow} 
+Clewlow, Les and Strickland, Chris.
+\textit{Implementing Derivative Models (Wiley Series in Financial Engineering)}. 
+John Wiley \& Sons 1996.
+ 
+\bibitem{rouah}
+Rouah, F. D. 
+\textit{The Heston Model and Its Extensions in Matlab and C}. 
+John Wiley \& Sons 2013.
+
+\bibitem{sergei} 
+Mikhailov, Sergei and Nögel, Ulrich.
+\textit{\href{http://www-users.math.umn.edu/~bemis/IMA/MMI2008/calibrating_heston.pdf}{Heston’s stochastic volatility model: Implementation, calibration and some extensions}}
+Wilmott Journal, 2004.
+
+\bibitem{bsreview}
+\textit{Lecture1-ReviewBlackScholesmodel.pdf,}
+2017.
+
+
+\bibitem{hwCode}
+\textit{\href{homework1Code.pdf}{Functions used for this report},}
+Titus Chirchir,
+2017.
+
+\end{thebibliography}
+
+
