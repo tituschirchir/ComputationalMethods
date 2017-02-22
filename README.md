@@ -2,7 +2,8 @@
 R Code for various computational methods in Finance
 
 This module will contain code to:
-  1. Module 1: Black-Scholes, Implied Vol, Quardrature methods and Heston Calibration
+
+## Module 1: Black-Scholes, Implied Vol, Quardrature methods and Heston Calibration
     a. Price put and call options using Black-Scholes model
     b. Download equity option data for given maturity dates and save them as .csv files
     c. Load up option data from a .csv file and generate a volatility smile and curve based on the Black-Scholes model
